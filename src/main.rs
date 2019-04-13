@@ -37,7 +37,7 @@ fn index(req: &HttpRequest) -> impl Responder {
 
 fn main() {
     server::new(|| App::new().resource("/check", |r| r.method(http::Method::GET).f(index)))
-        .bind("127.0.0.1:16016")
+        .bind("5.39.102.29:16016")
         .unwrap()
         .run();
 }
