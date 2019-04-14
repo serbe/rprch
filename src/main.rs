@@ -55,21 +55,17 @@ fn index2(req: &HttpRequest<State>) -> impl Responder {
     let mut pr = Proxy {
         hostname: String::new(),
     };
-    match req.state().db.get() {
-        Ok(client) => match &client.query(
+    if let Ok(client) = req.state().db.get() {
+        if let Ok(rows) = &client.query(
             "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(0.1) LIMIT 1",
             &[],
         ) {
-            Ok(rows) => {
-                for row in rows {
-                    pr = Proxy {
-                        hostname: row.get(0),
-                    }
+            for row in rows {
+                pr = Proxy {
+                    hostname: row.get(0),
                 }
             }
-            _ => (),
-        },
-        _ => (),
+        }
     };
     HttpResponse::Ok()
         .content_type("text/plain")
