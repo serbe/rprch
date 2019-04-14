@@ -7,6 +7,10 @@ struct State {
     db: Pool<PostgresConnectionManager>,
 }
 
+struct Proxy {
+    hostname: String,
+}
+
 fn index1(req: &HttpRequest<State>) -> impl Responder {
     let headers = req.headers();
     [
@@ -45,7 +49,22 @@ fn index1(req: &HttpRequest<State>) -> impl Responder {
 }
 
 fn index2(req: &HttpRequest<State>) -> impl Responder {
-    let _pool = req.state().db.get().unwrap();
+    let client = req.state().db.get().unwrap();
+    let mut pr = Proxy {
+        hostname: String::new(),
+    };
+    for row in &client
+        .query(
+            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(0.1) LIMIT 1",
+            &[],
+        )
+        .unwrap()
+    {
+        pr = Proxy {
+            hostname: row.get(0),
+        }
+    }
+
     // let c = Contact::get(&pool, 2).unwrap();
     // let data = JsonData {
     //     data: c,
@@ -54,7 +73,7 @@ fn index2(req: &HttpRequest<State>) -> impl Responder {
     // };
     // // println!("Request number: {}\n{:?}", c.id, c.name);
     // HttpResponse::Ok().json(data)
-    format!("index1")
+    pr.hostname
 }
 
 fn main() {
