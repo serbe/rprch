@@ -1,4 +1,4 @@
-use actix_web::{http, server, App, HttpRequest, HttpResponse, Responder};
+use actix_web::{http, server, App, HttpRequest, Result};
 use r2d2::Pool;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 
@@ -11,7 +11,7 @@ struct Proxy {
     hostname: String,
 }
 
-fn check(req: &HttpRequest<State>) -> impl Responder {
+fn check(req: &HttpRequest<State>) -> Result<String> {
     let headers = req.headers();
     match req.peer_addr() {
         Some(peer_addr) => {
@@ -43,21 +43,19 @@ fn check(req: &HttpRequest<State>) -> impl Responder {
                     None => acc,
                 },
             );
-            HttpResponse::Ok().content_type("text/plain").body(res)
+            Ok(res)
         }
-        None => HttpResponse::Ok()
-            .content_type("text/plain")
-            .body("no parse peer addr"),
+        None => Ok("no parse peer addr".to_string())
     }
 }
 
-fn index2(req: &HttpRequest<State>) -> impl Responder {
+fn proxy(req: &HttpRequest<State>) -> Result<String> {
     let mut pr = Proxy {
         hostname: String::new(),
     };
     if let Ok(client) = req.state().db.get() {
         if let Ok(rows) = &client.query(
-            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(0.1) LIMIT 1",
+            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE work = true LIMIT 1",
             &[],
         ) {
             for row in rows {
@@ -67,9 +65,27 @@ fn index2(req: &HttpRequest<State>) -> impl Responder {
             }
         }
     };
-    HttpResponse::Ok()
-        .content_type("text/plain")
-        .body(pr.hostname)
+    Ok(pr.hostname)
+}
+
+fn proxy_with_scheme(req: &HttpRequest<State>) -> Result<String> {
+    let mut pr = Proxy {
+        hostname: String::new(),
+    };
+    let scheme = &req.match_info()["scheme"];
+    if let Ok(client) = req.state().db.get() {
+        if let Ok(rows) = &client.query(
+            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE work = true AND scheme = $1 LIMIT 1",
+            &[&scheme],
+        ) {
+            for row in rows {
+                pr = Proxy {
+                    hostname: row.get(0),
+                }
+            }
+        }
+    };
+    Ok(pr.hostname)
 }
 
 fn main() {
@@ -78,16 +94,18 @@ fn main() {
     let manager = PostgresConnectionManager::new(db_uri, TlsMode::None).unwrap();
     let pool = Pool::new(manager).unwrap();
     let state = State { db: pool.clone() };
-    let i2_path =
-        dotenv::var("i2_path").expect("No found variable i2_path like /checkpath in environment");
+    let proxy_path =
+        dotenv::var("proxy_path").expect("No found variable proxy_path like /proxypath in environment");
     let s_addr = dotenv::var("s_addr")
         .expect("No found variable s_addr like 127.0.0.1:10000 in environment");
     let check_path = dotenv::var("check_path")
         .expect("No found variable check_path like /checkpath in environment");
+    let proxy_path_with_scheme = format!("{}/{{scheme}}", proxy_path);
     server::new(move || {
         App::with_state(state.clone())
             .resource(&check_path, |r| r.method(http::Method::GET).f(check))
-            .resource(&i2_path, |r| r.method(http::Method::GET).f(index2))
+            .resource(&proxy_path, |r| r.method(http::Method::GET).f(proxy))
+            .resource(&proxy_path_with_scheme, |r| r.method(http::Method::GET).f(proxy_with_scheme))
     })
     .bind(s_addr)
     .unwrap()
