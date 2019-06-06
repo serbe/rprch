@@ -1,9 +1,10 @@
-use actix_web::{http, server, App, HttpRequest, Result};
+use actix_web::{HttpServer, web, App, HttpRequest, Error};
 use r2d2::Pool;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
+use futures::{Future, future::ok};
 
 #[derive(Clone)]
-struct State {
+struct DbPool {
     db: Pool<PostgresConnectionManager>,
 }
 
@@ -11,11 +12,11 @@ struct Proxy {
     hostname: String,
 }
 
-fn check(req: &HttpRequest<State>) -> Result<String> {
+fn check(req: HttpRequest) -> impl Future<Item = String, Error = Error> {
     let headers = req.headers();
-    match req.peer_addr() {
+    ok(match req.peer_addr() {
         Some(peer_addr) => {
-            let res = [
+            [
                 "CLIENT_IP",
                 "FORWARDED",
                 "FORWARDED_FOR",
@@ -42,18 +43,17 @@ fn check(req: &HttpRequest<State>) -> Result<String> {
                     }
                     None => acc,
                 },
-            );
-            Ok(res)
+            )
         }
-        None => Ok("no parse peer addr".to_string()),
-    }
+        None => "no parse peer addr".to_string(),
+    })
 }
 
-fn proxy(req: &HttpRequest<State>) -> Result<String> {
+fn proxy(db_pool: web::Data<DbPool>) -> impl Future<Item = String, Error = Error> {
     let mut pr = Proxy {
         hostname: String::new(),
     };
-    if let Ok(client) = req.state().db.get() {
+    if let Ok(client) = db_pool.db.get() {
         if let Ok(rows) = &client.query(
             "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE work = true LIMIT 1",
             &[],
@@ -65,14 +65,14 @@ fn proxy(req: &HttpRequest<State>) -> Result<String> {
             }
         }
     };
-    Ok(pr.hostname)
+    ok(pr.hostname)
 }
 
-fn anon_proxy(req: &HttpRequest<State>) -> Result<String> {
+fn anon_proxy(db_pool: web::Data<DbPool>) -> impl Future<Item = String, Error = Error> {
     let mut pr = Proxy {
         hostname: String::new(),
     };
-    if let Ok(client) = req.state().db.get() {
+    if let Ok(client) = db_pool.db.get() {
         if let Ok(rows) = &client.query(
             "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE anon = true AND work = true LIMIT 1",
             &[],
@@ -84,15 +84,15 @@ fn anon_proxy(req: &HttpRequest<State>) -> Result<String> {
             }
         }
     };
-    Ok(pr.hostname)
+    ok(pr.hostname)
 }
 
-fn proxy_with_scheme(req: &HttpRequest<State>) -> Result<String> {
+fn proxy_with_scheme(req: HttpRequest, db_pool: web::Data<DbPool>) -> impl Future<Item = String, Error = Error> {
     let mut pr = Proxy {
         hostname: String::new(),
     };
     let scheme = &req.match_info()["scheme"];
-    if let Ok(client) = req.state().db.get() {
+    if let Ok(client) = db_pool.db.get() {
         if let Ok(rows) = &client.query(
             "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE work = true AND scheme = $1 LIMIT 1",
             &[&scheme],
@@ -104,15 +104,15 @@ fn proxy_with_scheme(req: &HttpRequest<State>) -> Result<String> {
             }
         }
     };
-    Ok(pr.hostname)
+    ok(pr.hostname)
 }
 
-fn anon_proxy_with_scheme(req: &HttpRequest<State>) -> Result<String> {
+fn anon_proxy_with_scheme(req: HttpRequest, db_pool: web::Data<DbPool>) -> impl Future<Item = String, Error = Error> {
     let mut pr = Proxy {
         hostname: String::new(),
     };
     let scheme = &req.match_info()["scheme"];
-    if let Ok(client) = req.state().db.get() {
+    if let Ok(client) = db_pool.db.get() {
         if let Ok(rows) = &client.query(
             "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE anon = true AND work = true AND scheme = $1 LIMIT 1",
             &[&scheme],
@@ -124,7 +124,7 @@ fn anon_proxy_with_scheme(req: &HttpRequest<State>) -> Result<String> {
             }
         }
     };
-    Ok(pr.hostname)
+    ok(pr.hostname)
 }
 
 fn main() {
@@ -132,7 +132,7 @@ fn main() {
         .expect("No found variable db_uri like postgres://postgres@localhost:5433 in environment");
     let manager = PostgresConnectionManager::new(db_uri, TlsMode::None).unwrap();
     let pool = Pool::new(manager).unwrap();
-    let state = State { db: pool.clone() };
+    let db_pool = DbPool { db: pool.clone() };
     let proxy_path = dotenv::var("proxy_path")
         .expect("No found variable proxy_path like /proxypath in environment");
     let s_addr = dotenv::var("s_addr")
@@ -142,21 +142,15 @@ fn main() {
     let anon_proxy_path = format!("{}/anon", proxy_path);
     let proxy_path_with_scheme = format!("{}/{{scheme}}", proxy_path);
     let anon_proxy_path_with_scheme = format!("{}/anon/{{scheme}}", proxy_path);
-    server::new(move || {
-        App::with_state(state.clone())
-            .resource(&check_path, |r| r.method(http::Method::GET).f(check))
-            .resource(&proxy_path, |r| r.method(http::Method::GET).f(proxy))
-            .resource(&anon_proxy_path, |r| {
-                r.method(http::Method::GET).f(anon_proxy)
-            })
-            .resource(&proxy_path_with_scheme, |r| {
-                r.method(http::Method::GET).f(proxy_with_scheme)
-            })
-            .resource(&anon_proxy_path_with_scheme, |r| {
-                r.method(http::Method::GET).f(anon_proxy_with_scheme)
-            })
+    let _ = HttpServer::new(move || {
+        App::new()
+            .data(db_pool.clone())
+            .service(web::resource(&check_path).route(web::get().to_async(check)))
+            .service(web::resource(&proxy_path).route(web::get().to_async(proxy)))
+            .service(web::resource(&anon_proxy_path).route(web::get().to_async(anon_proxy)))
+            .service(web::resource(&proxy_path_with_scheme).route(web::get().to_async(proxy_with_scheme)))
+            .service(web::resource(&anon_proxy_path_with_scheme).route(web::get().to_async(anon_proxy_with_scheme)))
     })
-    .keep_alive(server::KeepAlive::Timeout(10))
     .bind(s_addr)
     .unwrap()
     .run();
