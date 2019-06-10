@@ -1,7 +1,7 @@
-use actix_web::{HttpServer, web, App, HttpRequest, Error};
+use actix_web::{web, App, Error, HttpRequest, HttpServer};
+use futures::{future::ok, Future};
 use r2d2::Pool;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
-use futures::{Future, future::ok};
 
 #[derive(Clone)]
 struct DbPool {
@@ -15,36 +15,34 @@ struct Proxy {
 fn check(req: HttpRequest) -> impl Future<Item = String, Error = Error> {
     let headers = req.headers();
     ok(match req.peer_addr() {
-        Some(peer_addr) => {
-            [
-                "CLIENT_IP",
-                "FORWARDED",
-                "FORWARDED_FOR",
-                "FORWARDED_FOR_IP",
-                "HTTP_CLIENT_IP",
-                "HTTP_FORWARDED",
-                "HTTP_FORWARDED_FOR",
-                "HTTP_FORWARDED_FOR_IP",
-                "HTTP_PROXY_CONNECTION",
-                "HTTP_VIA",
-                "HTTP_X_FORWARDED",
-                "HTTP_X_FORWARDED_FOR",
-                "VIA",
-                "X_FORWARDED",
-                "X_FORWARDED_FOR",
-            ]
-            .iter()
-            .fold(
-                format!("<p>RemoteAddr: {}</p>\r\n", peer_addr),
-                |mut acc, h| match headers.get(*h) {
-                    Some(key) => {
-                        acc.push_str(&format!("<p>{}: {:?}</p>\r\n", h, key));
-                        acc
-                    }
-                    None => acc,
-                },
-            )
-        }
+        Some(peer_addr) => [
+            "CLIENT_IP",
+            "FORWARDED",
+            "FORWARDED_FOR",
+            "FORWARDED_FOR_IP",
+            "HTTP_CLIENT_IP",
+            "HTTP_FORWARDED",
+            "HTTP_FORWARDED_FOR",
+            "HTTP_FORWARDED_FOR_IP",
+            "HTTP_PROXY_CONNECTION",
+            "HTTP_VIA",
+            "HTTP_X_FORWARDED",
+            "HTTP_X_FORWARDED_FOR",
+            "VIA",
+            "X_FORWARDED",
+            "X_FORWARDED_FOR",
+        ]
+        .iter()
+        .fold(
+            format!("<p>RemoteAddr: {}</p>\r\n", peer_addr),
+            |mut acc, h| match headers.get(*h) {
+                Some(key) => {
+                    acc.push_str(&format!("<p>{}: {:?}</p>\r\n", h, key));
+                    acc
+                }
+                None => acc,
+            },
+        ),
         None => "no parse peer addr".to_string(),
     })
 }
@@ -87,7 +85,10 @@ fn anon_proxy(db_pool: web::Data<DbPool>) -> impl Future<Item = String, Error = 
     ok(pr.hostname)
 }
 
-fn proxy_with_scheme(req: HttpRequest, db_pool: web::Data<DbPool>) -> impl Future<Item = String, Error = Error> {
+fn proxy_with_scheme(
+    req: HttpRequest,
+    db_pool: web::Data<DbPool>,
+) -> impl Future<Item = String, Error = Error> {
     let mut pr = Proxy {
         hostname: String::new(),
     };
@@ -107,7 +108,10 @@ fn proxy_with_scheme(req: HttpRequest, db_pool: web::Data<DbPool>) -> impl Futur
     ok(pr.hostname)
 }
 
-fn anon_proxy_with_scheme(req: HttpRequest, db_pool: web::Data<DbPool>) -> impl Future<Item = String, Error = Error> {
+fn anon_proxy_with_scheme(
+    req: HttpRequest,
+    db_pool: web::Data<DbPool>,
+) -> impl Future<Item = String, Error = Error> {
     let mut pr = Proxy {
         hostname: String::new(),
     };
@@ -148,8 +152,14 @@ fn main() {
             .service(web::resource(&check_path).route(web::get().to_async(check)))
             .service(web::resource(&proxy_path).route(web::get().to_async(proxy)))
             .service(web::resource(&anon_proxy_path).route(web::get().to_async(anon_proxy)))
-            .service(web::resource(&proxy_path_with_scheme).route(web::get().to_async(proxy_with_scheme)))
-            .service(web::resource(&anon_proxy_path_with_scheme).route(web::get().to_async(anon_proxy_with_scheme)))
+            .service(
+                web::resource(&proxy_path_with_scheme)
+                    .route(web::get().to_async(proxy_with_scheme)),
+            )
+            .service(
+                web::resource(&anon_proxy_path_with_scheme)
+                    .route(web::get().to_async(anon_proxy_with_scheme)),
+            )
     })
     .bind(s_addr)
     .unwrap()
