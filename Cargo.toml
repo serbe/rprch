@@ -5,9 +5,9 @@ authors = ["Serbe <mkoctuk@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-actix-web = "1.0"
+actix-rt = "1.0"
+actix-web = "2.0"
 dotenv = "0.15"
-futures = "0.1"
-postgres = "0.15"
+postgres = "0.17"
 r2d2 = "0.8"
-r2d2_postgres = "0.14"
+r2d2_postgres = "0.16"
