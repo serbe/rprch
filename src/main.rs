@@ -1,38 +1,8 @@
-use actix_web::{web, App, HttpRequest, HttpServer, Responder};
-use postgres::NoTls;
-use r2d2::Pool;
-use r2d2_postgres::PostgresConnectionManager;
+use actix_web::{web, App, Error, HttpRequest, HttpServer, Responder};
 
-#[derive(Clone)]
-struct DbPool {
-    db: Pool<PostgresConnectionManager<NoTls>>,
-}
+use db::{get_pool, get_proxy, Pool};
 
-struct Proxy {
-    hostname: String,
-}
-
-fn get_connurl() -> String {
-    let dbname = dotenv::var("DB_NAME").expect("missing env DB_NAME");
-    let dbuser = dotenv::var("DB_USER");
-    let dbpassword = dotenv::var("DB_PASSWORD");
-    let dbhost = dotenv::var("DB_HOST");
-    let dbport = dotenv::var("DB_PORT");
-    let mut conn_str = format!("dbname={}", dbname);
-    if let Ok(user) = dbuser {
-        conn_str.push_str(format!(" user={}", user).as_str())
-    };
-    if let Ok(password) = dbpassword {
-        conn_str.push_str(format!(" password={}", password).as_str())
-    };
-    if let Ok(host) = dbhost {
-        conn_str.push_str(format!(" host={}", host).as_str())
-    };
-    if let Ok(port) = dbport {
-        conn_str.push_str(format!(" port={}", port).as_str())
-    };
-    conn_str
-}
+mod db;
 
 async fn check(req: HttpRequest) -> impl Responder {
     let headers = req.headers();
@@ -69,91 +39,32 @@ async fn check(req: HttpRequest) -> impl Responder {
     }
 }
 
-async fn proxy(db_pool: web::Data<DbPool>) -> impl Responder {
-    let mut pr = Proxy {
-        hostname: String::new(),
-    };
-    if let Ok(mut client) = db_pool.db.get() {
-        if let Ok(rows) = &client.query(
-            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE work = true LIMIT 1",
-            &[],
-        ) {
-            for row in rows {
-                pr = Proxy {
-                    hostname: row.get(0),
-                }
-            }
-        }
-    };
-    pr.hostname
+async fn proxy(db: web::Data<Pool>) -> Result<String, Error> {
+    let result = get_proxy(db, false, None).await?;
+    Ok(result)
 }
 
-async fn anon_proxy(db_pool: web::Data<DbPool>) -> impl Responder {
-    let mut pr = Proxy {
-        hostname: String::new(),
-    };
-    if let Ok(mut client) = db_pool.db.get() {
-        if let Ok(rows) = &client.query(
-            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE anon = true AND work = true LIMIT 1",
-            &[],
-        ) {
-            for row in rows {
-                pr = Proxy {
-                    hostname: row.get(0),
-                }
-            }
-        }
-    };
-    pr.hostname
+async fn anon_proxy(db: web::Data<Pool>) -> Result<String, Error> {
+    let result = get_proxy(db, true, None).await?;
+    Ok(result)
 }
 
-async fn proxy_with_scheme(req: HttpRequest, db_pool: web::Data<DbPool>) -> impl Responder {
-    let mut pr = Proxy {
-        hostname: String::new(),
-    };
+async fn proxy_with_scheme(req: HttpRequest, db: web::Data<Pool>) -> Result<String, Error> {
     let scheme = &req.match_info()["scheme"];
-    if let Ok(mut client) = db_pool.db.get() {
-        if let Ok(rows) = &client.query(
-            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE work = true AND scheme = $1 LIMIT 1",
-            &[&scheme],
-        ) {
-            for row in rows {
-                pr = Proxy {
-                    hostname: row.get(0),
-                }
-            }
-        }
-    };
-    pr.hostname
+    let result = get_proxy(db, false, Some(scheme.to_string())).await?;
+    Ok(result)
 }
 
-async fn anon_proxy_with_scheme(req: HttpRequest, db_pool: web::Data<DbPool>) -> impl Responder {
-    let mut pr = Proxy {
-        hostname: String::new(),
-    };
+async fn anon_proxy_with_scheme(req: HttpRequest, db: web::Data<Pool>) -> Result<String, Error> {
     let scheme = &req.match_info()["scheme"];
-    if let Ok(mut client) = db_pool.db.get() {
-        if let Ok(rows) = &client.query(
-            "SELECT hostname FROM proxies TABLESAMPLE SYSTEM(1) WHERE anon = true AND work = true AND scheme = $1 LIMIT 1",
-            &[&scheme],
-        ) {
-            for row in rows {
-                pr = Proxy {
-                    hostname: row.get(0),
-                }
-            }
-        }
-    };
-    pr.hostname
+    let result = get_proxy(db, true, Some(scheme.to_string())).await?;
+    Ok(result)
 }
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
     dotenv::dotenv().ok();
-    let conn_str = get_connurl();
-    let manager = PostgresConnectionManager::new(conn_str.parse().unwrap(), NoTls);
-    let pool = Pool::new(manager).unwrap();
-    let db_pool = DbPool { db: pool.clone() };
+    let db_pool = get_pool();
     let proxy_path = dotenv::var("proxy_path")
         .expect("No found variable proxy_path like /proxypath in environment");
     let s_addr = dotenv::var("s_addr")
