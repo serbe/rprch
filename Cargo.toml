@@ -1,15 +1,15 @@
 [package]
 name = "rprch"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["Serbe <mkoctuk@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-actix-rt = "1.0"
-actix-web = "2.0"
+actix-rt = "2.1"
+actix-web = "3.0"
 anyhow = "1.0"
 dotenv = "0.15"
-postgres = "0.17"
+hyper = {version = "0.14", features = ['http1', 'server', 'tcp']}
+postgres = "0.19"
 r2d2 = "0.8"
-r2d2_postgres = "0.16"
-futures = "0.3"
+r2d2_postgres = "0.18"

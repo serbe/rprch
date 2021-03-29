@@ -1,6 +1,5 @@
 use actix_web::{web, Error as AWError};
 use anyhow::Error;
-use futures::{Future, TryFutureExt};
 use postgres::NoTls;
 use r2d2_postgres::PostgresConnectionManager;
 
@@ -35,7 +34,7 @@ pub fn get_pool() -> Pool {
 }
 
 fn db_getter(
-    db_pool: web::Data<Pool>,
+    db_pool: Pool,
     anon: bool,
     scheme: Option<String>,
 ) -> Result<String, Error> {
@@ -68,10 +67,10 @@ fn db_getter(
     Ok(hostname)
 }
 
-pub fn get_proxy(
-    db_pool: web::Data<Pool>,
+pub async fn get_proxy(
+    db_pool: Pool,
     anon: bool,
     scheme: Option<String>,
-) -> impl Future<Output = Result<String, AWError>> {
-    web::block(move || db_getter(db_pool, anon, scheme)).map_err(AWError::from)
+) -> Result<String, AWError> {
+    web::block(move || db_getter(db_pool, anon, scheme)).await.map_err(AWError::from)
 }
