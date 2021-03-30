@@ -1,6 +1,7 @@
-use anyhow::Error;
 use deadpool_postgres::{Manager, Pool};
 use tokio_postgres::{Config, NoTls};
+
+use crate::error::ChError;
 
 fn get_config() -> Config {
     let mut config = Config::new();
@@ -28,7 +29,11 @@ pub fn get_pool() -> Pool {
     Pool::new(manager, 16)
 }
 
-pub async fn get_proxy(db_pool: Pool, anon: bool, scheme: Option<String>) -> Result<String, Error> {
+pub async fn get_proxy(
+    db_pool: Pool,
+    anon: bool,
+    scheme: Option<String>,
+) -> Result<String, ChError> {
     let client = db_pool.get().await?;
     let anon_cond = if anon { " AND anon = true" } else { "" };
     let scheme_cond = if let Some(scheme) = scheme {
