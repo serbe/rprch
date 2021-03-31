@@ -9,7 +9,6 @@ use crate::error::ChError;
 
 mod db;
 mod error;
-// mod hyp;
 
 struct DB {
     pub pool: Pool,
@@ -92,13 +91,11 @@ fn router() -> Router<Body, ChError> {
     let anon_proxy_path_with_scheme = format!("{}/anon/:scheme", proxy_path);
     Router::builder()
         .data(DB::new(pool))
-        // .middleware(Middleware::pre(logger))
         .get(proxy_path, proxy)
         .get(anon_proxy_path, anon_proxy)
         .get(proxy_path_with_scheme, proxy_with_scheme)
         .get(anon_proxy_path_with_scheme, anon_proxy_with_scheme)
         .get(check_path, check)
-        // .err_handler_with_info(error_handler)
         .build()
         .unwrap()
 }
