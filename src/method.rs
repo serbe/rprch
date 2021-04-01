@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::{fmt, str::FromStr};
 
 use crate::error::ChError;
@@ -40,18 +41,30 @@ impl Default for Method {
 impl FromStr for Method {
     type Err = ChError;
 
-    fn from_str(s: &str) -> Result<Self, ChError> {
-        match s.to_ascii_uppercase().as_str() {
-            "OPTIONS" => Ok(Method::Options),
-            "GET" => Ok(Method::Get),
-            "HEAD" => Ok(Method::Head),
-            "POST" => Ok(Method::Post),
-            "PUT" => Ok(Method::Put),
-            "DELETE" => Ok(Method::Delete),
-            "CONNECT" => Ok(Method::Connect),
-            "TRACE" => Ok(Method::Trace),
-            s => Ok(Method::Custom(s.to_string())),
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            Err(ChError::EmptyMethod)
+        } else {
+            match s.to_ascii_uppercase().as_str() {
+                "OPTIONS" => Ok(Method::Options),
+                "GET" => Ok(Method::Get),
+                "HEAD" => Ok(Method::Head),
+                "POST" => Ok(Method::Post),
+                "PUT" => Ok(Method::Put),
+                "DELETE" => Ok(Method::Delete),
+                "CONNECT" => Ok(Method::Connect),
+                "TRACE" => Ok(Method::Trace),
+                s => Ok(Method::Custom(s.to_string())),
+            }
         }
+    }
+}
+
+impl TryFrom<Option<&str>> for Method {
+    type Error = ChError;
+
+    fn try_from(value: Option<&str>) -> Result<Self, Self::Error> {
+        Method::from_str(value.unwrap_or(""))
     }
 }
 

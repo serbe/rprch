@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map, HashMap},
+    convert::TryFrom,
     fmt::{Display, Formatter},
     str::FromStr,
 };
@@ -62,7 +63,9 @@ impl FromStr for Headers {
     fn from_str(s: &str) -> Result<Headers, ChError> {
         let headers = s.trim();
 
-        if headers.lines().all(|e| e.contains(':')) {
+        if headers.is_empty() {
+            Err(ChError::EmptyHeader)
+        } else if headers.lines().all(|e| e.contains(':')) {
             let headers = headers
                 .lines()
                 .map(|elem| {
@@ -82,6 +85,14 @@ impl FromStr for Headers {
     }
 }
 
+impl TryFrom<Option<&str>> for Headers {
+    type Error = ChError;
+
+    fn try_from(value: Option<&str>) -> Result<Self, Self::Error> {
+        Headers::from_str(value.unwrap_or(""))
+    }
+}
+
 impl From<HashMap<String, String>> for Headers {
     fn from(map: HashMap<String, String>) -> Headers {
         let headers = map
@@ -95,6 +106,15 @@ impl From<HashMap<String, String>> for Headers {
 impl From<Headers> for HashMap<String, String> {
     fn from(map: Headers) -> HashMap<String, String> {
         map.0
+    }
+}
+
+impl TryFrom<std::str::Lines<'_>> for Headers {
+    type Error = ChError;
+
+    fn try_from(lines: std::str::Lines<'_>) -> Result<Self, Self::Error> {
+        let headers: String = lines.into_iter().collect();
+        Headers::from_str(&headers)
     }
 }
 

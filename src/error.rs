@@ -22,8 +22,18 @@ pub enum ChError {
     IoError(#[from] std::io::Error),
     #[error("Parse utf8")]
     FromUtf8(#[from] std::str::Utf8Error),
-    #[error("No request-uri")]
-    NoRequestUri,
+    // #[error("No request-uri")]
+    // NoRequestUri,
+    #[error("Method is empty")]
+    EmptyMethod,
+    #[error("Headers is empty")]
+    EmptyHeader,
+    #[error("Version is empty")]
+    EmptyVersion,
+    #[error("Request uri is empty")]
+    EmptyRequestUri,
+    #[error("Request line more when 3 chunks")]
+    RequestLineToBig,
 }
 
 #[derive(Debug, thiserror::Error)]

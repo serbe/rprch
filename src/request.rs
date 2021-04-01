@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::convert::TryFrom;
 
 use bytes::Bytes;
 use tokio::io::AsyncReadExt;
@@ -18,45 +18,53 @@ pub struct Request {
     request_uri: String,
     version: Version,
     headers: Headers,
-    body: Option<Bytes>,
+    // body: Option<Bytes>,
     // host: String,
 }
 
-pub async fn get_request(stream: &mut TcpStream) -> Result<Request, ChError> {
-    let mut header = Vec::with_capacity(512);
-    while !(header.len() > 4 && header[header.len() - 4..] == b"\r\n\r\n"[..]) {
-        header.push(stream.read_u8().await.or(Err(ChError::HeaderIncomplete))?);
-        if header.len() > 1024 {
-            return Err(ChError::HeaderToBig);
-        }
-    }
-    let mut request = Request::from_header(&header)?;
-
-    request.body = if let Ok(body) = request.get_body(stream).await {
-        Some(body)
-    } else {
-        None
-    };
-
-    Ok(request)
-}
-
 impl Request {
+    pub async fn from_stream(stream: &mut TcpStream) -> Result<Request, ChError> {
+        let mut header = Vec::with_capacity(512);
+        while !(header.len() > 4 && header[header.len() - 4..] == b"\r\n\r\n"[..]) {
+            header.push(stream.read_u8().await.or(Err(ChError::HeaderIncomplete))?);
+            if header.len() > 1024 {
+                return Err(ChError::HeaderToBig);
+            }
+        }
+        let request = Request::from_header(&header)?;
+
+        // request.body = if let Ok(body) = request.get_body(stream).await {
+        //     Some(body)
+        // } else {
+        //     None
+        // };
+
+        Ok(request)
+    }
+
     pub fn from_header(header: &[u8]) -> Result<Request, ChError> {
         let mut header = std::str::from_utf8(header)?.lines();
+        let mut request_line = header.next().ok_or(ChError::EmptyHeader)?.trim().split(" ");
+        let method = Method::try_from(request_line.next())?;
+        let request_uri = request_line
+            .next()
+            .ok_or(ChError::EmptyRequestUri)?
+            .to_string();
+        let version = Version::try_from(request_line.next())?;
 
-        let request_uri = header.next().ok_or(ChError::NoRequestUri)?.split(" ");
+        if request_line.next().is_some() {
+            return Err(ChError::RequestLineToBig);
+        }
 
-        let method = Method::from(request_uri.next());
-        let headers = header.next().ok_or(ChError::HeadersErr)?.parse()?;
-        let body = Bytes::new();
+        let headers = Headers::try_from(header)?;
+        // let body = Bytes::new();
 
-        Ok(Response {
-            method: Method,
-            request_uri: String,
-            version: Version,
-            headers: Headers,
-            body: None,
+        Ok(Request {
+            method,
+            request_uri,
+            version,
+            headers,
+            // body: None,
         })
     }
     // pub fn new(url: &Url, proxy: Option<&Url>) -> Request {
@@ -210,7 +218,7 @@ impl Request {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     const BODY: &str = "<html>hello</html>\r\n\r\nhello";
     const CONTENT_LENGTH: usize = 27;
