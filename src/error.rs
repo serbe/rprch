@@ -4,14 +4,12 @@ pub enum ChError {
     PgError(#[from] tokio_postgres::Error),
     #[error("Deadpool: {0}")]
     PoolError(#[from] deadpool_postgres::PoolError),
-    #[error("Request no have data")]
-    NoData,
-    #[error("Request no have param")]
-    NoParam,
     #[error("Parse headers: {0}")]
     HeaderParse(String),
     #[error("Unsupported version {0}")]
     VersionUnsupported(String),
+    #[error("Unsupported method {0}")]
+    MethodUnsupported(String),
     #[error("Header incomplete")]
     HeaderIncomplete,
     #[error("Header more when 1024")]
@@ -30,28 +28,12 @@ pub enum ChError {
     EmptyRequestUri,
     #[error("Request line more when 3 chunks")]
     RequestLineToBig,
-    #[error("Status code is empty")]
-    EmptyStatusCode,
-    #[error("Response is empty")]
-    EmptyResponse,
-    #[error("Invalid status code {0}")]
-    InvalidStatusCode(u16),
     #[error("Parse int")]
     ParseInt(#[from] std::num::ParseIntError),
-    #[error("Status line is empty")]
-    EmptyStatus,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum TsError {
-    #[error("Input output: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("Executing DB query: {0}")]
-    PgError(#[from] tokio_postgres::Error),
-    #[error("Deadpool: {0}")]
-    PoolError(#[from] deadpool_postgres::PoolError),
-    #[error("Request no have data")]
-    NoData,
-    #[error("Request no have param")]
-    NoParam,
+impl From<ChError> for std::io::Error {
+    fn from(err: ChError) -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::Other, err.to_string())
+    }
 }
