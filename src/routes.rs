@@ -2,7 +2,9 @@ use std::net::SocketAddr;
 
 use deadpool_postgres::Pool;
 
-use crate::{db::get_proxy, error::ChError, request::Request, response::Response};
+use crate::{
+    db::get_proxy, error::ChError, request::Request, response::Response, version::Version,
+};
 
 pub async fn check(req: &Request, client: SocketAddr) -> Result<Response, ChError> {
     let headers = req.headers();
@@ -35,15 +37,15 @@ pub async fn check(req: &Request, client: SocketAddr) -> Result<Response, ChErro
         },
     );
 
-    Ok(Response::new(body))
+    Ok(Response::new(req.version(), body))
 }
 
-pub async fn proxy(req: &Request, pool: Pool) -> Result<Response, ChError> {
-    let body = get_proxy(pool, false, None).await?;
-    Ok(Response::new(body))
-}
-
-pub async fn anon_proxy(req: &Request, pool: Pool) -> Result<Response, ChError> {
-    let body = get_proxy(pool, true, None).await?;
-    Ok(Response::new(body))
+pub async fn proxy(
+    pool: Pool,
+    anon: bool,
+    scheme: Option<&str>,
+    version: Version,
+) -> Result<Response, ChError> {
+    let body = get_proxy(pool, anon, scheme.map(|v| v.to_string())).await?;
+    Ok(Response::new(version, body))
 }
