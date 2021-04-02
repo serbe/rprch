@@ -1,5 +1,3 @@
-pub type Result<T> = std::result::Result<T, ChError>;
-
 #[derive(Debug, thiserror::Error)]
 pub enum ChError {
     #[error("Executing DB query: {0}")]
@@ -22,8 +20,6 @@ pub enum ChError {
     IoError(#[from] std::io::Error),
     #[error("Parse utf8")]
     FromUtf8(#[from] std::str::Utf8Error),
-    // #[error("No request-uri")]
-    // NoRequestUri,
     #[error("Method is empty")]
     EmptyMethod,
     #[error("Headers is empty")]
@@ -34,6 +30,16 @@ pub enum ChError {
     EmptyRequestUri,
     #[error("Request line more when 3 chunks")]
     RequestLineToBig,
+    #[error("Status code is empty")]
+    EmptyStatusCode,
+    #[error("Response is empty")]
+    EmptyResponse,
+    #[error("Invalid status code {0}")]
+    InvalidStatusCode(u16),
+    #[error("Parse int")]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[error("Status line is empty")]
+    EmptyStatus,
 }
 
 #[derive(Debug, thiserror::Error)]

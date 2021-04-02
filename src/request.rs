@@ -1,16 +1,9 @@
 use std::convert::TryFrom;
 
 use bytes::Bytes;
-use tokio::io::AsyncReadExt;
-use tokio::net::TcpStream;
-// use base64::encode;
-// use url::Url;
+use tokio::{io::AsyncReadExt, net::TcpStream};
 
-use crate::error::ChError;
-use crate::headers::Headers;
-use crate::method::Method;
-use crate::version::Version;
-// use crate::utils::{host_header, host_port};
+use crate::{error::ChError, headers::Headers, method::Method, version::Version};
 
 #[derive(Clone, Debug)]
 pub struct Request {
@@ -207,14 +200,25 @@ impl Request {
     //     self.body.clone()
     // }
 
-    pub fn get_headers(&self) -> Headers {
+    pub fn headers(&self) -> Headers {
         self.headers.clone()
     }
 
-    pub fn request_uri(&self) -> String {
-        self.request_uri.clone()
+    pub fn request_uri(&self) -> &str {
+        &self.request_uri
     }
 }
+
+// impl Display for Request {
+//     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+//         let request: String = format!(
+//             "Request {{\r\n{} {} {}\r\n{}\r\n}}\r\n",
+//             self.method, self.request_uri, self.version, self.headers
+//         );
+
+//         write!(f, "{}", request)
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

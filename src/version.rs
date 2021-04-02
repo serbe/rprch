@@ -23,6 +23,25 @@ impl Version {
     }
 }
 
+impl TryFrom<&str> for Version {
+    type Error = ChError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.is_empty() {
+            Err(ChError::EmptyVersion)
+        } else {
+            match value.to_uppercase().as_str() {
+                "HTTP/0.9" => Ok(Version::Http09),
+                "HTTP/1.0" => Ok(Version::Http10),
+                "HTTP/1.1" => Ok(Version::Http11),
+                "HTTP/2.0" => Ok(Version::H2),
+                "HTTP/3.0" => Ok(Version::H3),
+                _ => Err(ChError::VersionUnsupported(value.to_owned())),
+            }
+        }
+    }
+}
+
 impl Default for Version {
     fn default() -> Self {
         Version::Http11

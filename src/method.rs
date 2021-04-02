@@ -1,5 +1,4 @@
-use std::convert::TryFrom;
-use std::{fmt, str::FromStr};
+use std::{convert::TryFrom, fmt, str::FromStr};
 
 use crate::error::ChError;
 
