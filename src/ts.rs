@@ -22,9 +22,7 @@ pub async fn tserver() -> Result<(), ChError> {
                 "/c" => check(&req, client).await?,
                 "/pn" => proxy(pool.clone(), false, None, version).await?,
                 "/pnh" => proxy(pool.clone(), false, Some("http"), version).await?,
-                "/pns" => {
-                    proxy(pool.clone(), false, Some("socks5"), version).await?
-                }
+                "/pns" => proxy(pool.clone(), false, Some("socks5"), version).await?,
                 "/pa" => proxy(pool.clone(), true, None, version).await?,
                 "/pah" => proxy(pool.clone(), true, Some("http"), version).await?,
                 "/pas" => proxy(pool.clone(), true, Some("socks5"), version).await?,

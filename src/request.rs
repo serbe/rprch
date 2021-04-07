@@ -61,6 +61,6 @@ impl Request {
     }
 
     pub fn version(&self) -> Version {
-        self.version.clone()
+        self.version
     }
 }

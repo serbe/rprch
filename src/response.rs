@@ -44,10 +44,7 @@ impl Response {
     pub fn to_bytes(&self) -> Vec<u8> {
         let status_line = format!(
             "{} {} {}{}",
-            self.version,
-            self.status_code,
-            self.reason,
-            "\r\n"
+            self.version, self.status_code, self.reason, "\r\n"
         );
 
         let headers: String = self
