@@ -11,5 +11,5 @@ dotenv = "0.15"
 # hyper = {version = "0.14", features = ['http1', 'server', 'tcp']}
 # routerify = "2.0"
 thiserror = "1.0"
-tokio = {version = "1.4", features = ["io-util", "sync", "macros", "rt-multi-thread", "net"]}
+tokio = {version = "1.5", features = ["io-util", "sync", "macros", "rt-multi-thread", "net"]}
 tokio-postgres = "0.7"
